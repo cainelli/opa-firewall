@@ -2,18 +2,28 @@ package main
 
 import (
 	"log"
-	"net/http"
 
-	"github.com/cainelli/opa-firewall/internal/pkg/firewall"
+	"github.com/cainelli/opa-firewall/pkg/policies"
+	nouseragent "github.com/cainelli/opa-firewall/pkg/policies/no-user-agent"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
 
-	log.Print("running server")
+	log.Print("initializing server")
 
-	handler := firewall.New()
-	http.HandleFunc("/", handler.OnRequest)
+	logger := logrus.New()
 
-	http.ListenAndServe(":8080", nil)
+	policyController := policies.New([]policies.PolicyInterface{
+		nouseragent.New(logger),
+	}, logger)
+
+	policyController.Run()
+
+	// handler := firewall.New()
+	// http.HandleFunc("/", handler.OnRequest)
+
+	// log.Print("server ready")
+	// http.ListenAndServe(":8080", nil)
 
 }

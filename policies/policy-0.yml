@@ -1,6 +1,7 @@
 
 ---
-name: supplier
+
+name: supplier0
 type: full
 rego: |
   deny {
@@ -20002,7 +20003,6 @@ rego: |
   deny {
     input.host = "supplier4999.domain.com"
     input.path = "/login-4999"
-    input.ip = "1.1.1.4999"} 
+    input.ip = "1.1.1.4999"}
 data:
-  whitelist2: ["1"]
-  
+  blacklist: []
