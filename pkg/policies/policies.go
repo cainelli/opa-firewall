@@ -6,14 +6,23 @@ import (
 	"os"
 
 	"github.com/cainelli/opa-firewall/pkg/firewall"
+	"github.com/cainelli/opa-firewall/pkg/stream"
+	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/sirupsen/logrus"
 )
 
 // New ...
 func New(policies []PolicyInterface, logger *logrus.Logger) *PolicyController {
+	producer, err := stream.NewProducer()
+	if err != nil {
+		panic(err)
+	}
 	return &PolicyController{
-		Logger:   logger,
-		Policies: policies,
+		Logger:          logger,
+		Policies:        policies,
+		Producer:        producer,
+		EventsTopicName: "firewall-events",
+		PolicyTopicName: "firewall-policies",
 	}
 }
 
@@ -35,12 +44,14 @@ func (controller *PolicyController) Run() {
 			continue
 		}
 
-		controller.ProcessingEvent = event
-
-		policyEvents := controller.Evaluate()
+		policyEvents := controller.Evaluate(event)
 		if len(policyEvents) > 0 {
 			for _, policyEvent := range policyEvents {
-				controller.Logger.Info(policyEvent.Name)
+				err := controller.SendPolicyEvent(policyEvent)
+				if err != nil {
+					controller.Logger.Error(err)
+					continue
+				}
 			}
 		}
 	}
@@ -50,11 +61,11 @@ func (controller *PolicyController) Run() {
 	}
 }
 
-// Evaluate will call the policies and and return a PolicyEvent from Classify functions.
-func (controller *PolicyController) Evaluate() []firewall.PolicyEvent {
+// Evaluate will call the policies and and return a PolicyEvent .
+func (controller *PolicyController) Evaluate(event *IngressEvent) []firewall.PolicyEvent {
 	policyEvents := []firewall.PolicyEvent{}
 	for _, policy := range controller.Policies {
-		isRelevant, err := policy.IsRelevant(controller.ProcessingEvent)
+		isRelevant, err := policy.IsRelevant(event)
 		if err != nil {
 			controller.Logger.Errorf("%s: %v", policy.Name(), err)
 			continue
@@ -64,20 +75,46 @@ func (controller *PolicyController) Evaluate() []firewall.PolicyEvent {
 			continue
 		}
 
-		err = policy.Process(controller.ProcessingEvent)
+		policyEvent, err := policy.Process(event)
 		if err != nil {
 			controller.Logger.Errorf("%s: %v", policy.Name(), err)
+			continue
+		}
+		if err != nil {
+			controller.Logger.Errorf("%s: %v", policy.Name(), err)
+			continue
+		}
+		// check if policy is empty
+		if policyEvent.Name == "" {
 			continue
 		}
 
-		policyEvent, err := policy.Classify(controller.ProcessingEvent)
-		if err != nil {
-			controller.Logger.Errorf("%s: %v", policy.Name(), err)
-			continue
-		}
-		if policyEvent != (firewall.PolicyEvent{}) {
-			policyEvents = append(policyEvents, policyEvent)
-		}
+		policyEvents = append(policyEvents, policyEvent)
 	}
 	return policyEvents
+}
+
+// SendPolicyEvent ...
+func (controller *PolicyController) SendPolicyEvent(event firewall.PolicyEvent) error {
+	deliveryChan := make(chan kafka.Event)
+	defer close(deliveryChan)
+
+	policyEventBytes, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	controller.Logger.Infof("producing policy event to %s", controller.PolicyTopicName)
+	controller.Producer.Produce(&kafka.Message{
+		TopicPartition: kafka.TopicPartition{Topic: &controller.PolicyTopicName},
+		Value:          policyEventBytes,
+	}, deliveryChan)
+
+	if err == nil {
+		event := <-deliveryChan
+		message := event.(*kafka.Message)
+		err = message.TopicPartition.Error
+	}
+
+	return err
 }

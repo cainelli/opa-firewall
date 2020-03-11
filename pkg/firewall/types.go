@@ -1,6 +1,8 @@
 package firewall
 
 import (
+	"time"
+
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/storage"
 )
@@ -12,6 +14,13 @@ type Firewall struct {
 	Compilers     *ast.Compiler
 	Store         storage.Store
 }
+
+const (
+	// EventTypePatch ...
+	EventTypePatch = "PATCH"
+	// EventTypeFull ...
+	EventTypeFull = "FULL"
+)
 
 // PolicyEvent ...
 type PolicyEvent struct {
@@ -30,8 +39,19 @@ type PolicyEvent struct {
 	// allow {
 	// 		data.partner.dev_key = input.header["x-dev-access-key"]
 	// }
-	Data interface{} `json:"data" yaml:"data"`
+	Data interface{} `json:"data,omitempty" yaml:"data"`
+	// IPBuckets are the origin data structure that we build ip binary tree. Ex.
+	// {"blacklist":{"40.127.145.4":"2020-03-11T12:05:57.137118+01:00"}}
+	// The blacklist is the bucket name which can be used on the rego policy. The ip as key and its value is
+	// the expiration time of the IP in the binary tree. A example use case in a rego policy would be:
+	// deny {
+	//   ip_in_tree(input.ip, blacklist)
+	// }
+	IPBuckets IPBuckets `json:"ipbuckets,omitempty" yaml:"ipbuckets"`
 }
+
+// IPBuckets ...
+type IPBuckets map[string]map[string]time.Time
 
 // Configuration defines the configuration section for firewall handler
 type Configuration struct {

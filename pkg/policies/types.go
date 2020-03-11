@@ -1,7 +1,14 @@
 package policies
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/cainelli/opa-firewall/pkg/firewall"
+	"github.com/cainelli/opa-firewall/pkg/ratelimiter"
+	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/sirupsen/logrus"
 )
 
@@ -9,7 +16,9 @@ import (
 type PolicyController struct {
 	Logger          *logrus.Logger
 	Policies        []PolicyInterface
-	ProcessingEvent *IngressEvent
+	Producer        *kafka.Producer
+	PolicyTopicName string
+	EventsTopicName string
 }
 
 // IngressEvent defines the event struct sent during the request cycle
@@ -28,19 +37,46 @@ type IngressEvent struct {
 type PolicyInterface interface {
 	// IsRelevant Returns true if the rule is relevant for this event
 	// For example, some rules might only apply for specific virtual hosts,
-	// URIs or geoip locations. If IsRelevant returns false, Classify and
+	// URIs or geoip locations. If IsRelevant returns false
 	// Process will not be called for this event.
 	IsRelevant(event *IngressEvent) (bool, error)
 	// Process the request to collect data which will be used to classify the
 	// request as legitimate or not. An implementation of this method will
 	// typically look at the request and record some data about it in a shared
 	// cache
-	Process(event *IngressEvent) error
-	// Returns a policy event if the request is suspicious and indicates a need to block.
-	// An implementation will typically look at the
-	// request event, as well as data recorded about the request in shared dicts
-	// in order to apply the policy.
-	Classify(event *IngressEvent) (firewall.PolicyEvent, error)
+	Process(event *IngressEvent) (firewall.PolicyEvent, error)
+	// Returns a policy event containing the full data.
+	GetPolicyEvent(event *IngressEvent) (firewall.PolicyEvent, error)
 	// Name returns the name of the Policy being implemented.
 	Name() string
+}
+
+// Policy ...
+type Policy struct {
+	RateLimiter   *ratelimiter.RateLimiter
+	Logger        *logrus.Logger
+	BlockDuration time.Duration
+}
+
+// ConvertEventTime takes an event time string and converts it to time.Time
+func (policy *Policy) ConvertEventTime(timeString string) (time.Time, error) {
+	timeSplitted := strings.Split(timeString, ".")
+	if len(timeSplitted) != 2 {
+		return time.Time{}, fmt.Errorf("wrong time format:%s, expected something like 1583503992.449", timeString)
+	}
+
+	unixTimeStamp, err := strconv.ParseInt(timeSplitted[0], 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	miliseconds, err := strconv.ParseInt(timeSplitted[1], 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	nanoseconds := miliseconds * 1000000
+
+	return time.Unix(unixTimeStamp, nanoseconds), nil
+
 }
