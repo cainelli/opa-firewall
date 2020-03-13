@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/cainelli/opa-firewall/pkg/policies"
 	nouseragent "github.com/cainelli/opa-firewall/pkg/policies/no-user-agent"
@@ -14,16 +15,14 @@ func main() {
 
 	logger := logrus.New()
 
-	policyController := policies.New([]policies.PolicyInterface{
-		nouseragent.New(logger),
-	}, logger)
+	for {
+		select {
+		case <-time.After(5 * time.Second):
+			policyController := policies.New([]policies.PolicyInterface{
+				nouseragent.New(logger),
+			}, logger)
 
-	policyController.Run()
-
-	// handler := firewall.New()
-	// http.HandleFunc("/", handler.OnRequest)
-
-	// log.Print("server ready")
-	// http.ListenAndServe(":8080", nil)
-
+			policyController.Run()
+		}
+	}
 }

@@ -12,11 +12,30 @@ services:
       SASL_MECHANISM: PLAIN
       SASL_PLAIN_USERNAME: admin
       SASL_PLAIN_PASSWORD: admin-secret
-      DEBUG: "true"
+      DEBUG: "false"
     volumes:
       - ${PWD}/:/go/src/github.com/cainelli/opa-firewall
     working_dir: /go/src/github.com/cainelli/opa-firewall/
     command: "-c ./config/development/air-policy-generator.conf"
+  policy-enforcer:
+    depends_on:
+      - kafka
+    build:
+      context: .
+      dockerfile: dev.Dockerfile
+    environment:
+      KPROXY_KAFKA: kafka
+      SECURITY_PROTOCOL: SASL_PLAINTEXT
+      LIBRD__GROUP_ID: policy-enforcer
+      LIBRD__AUTO_OFFSET_RESET: "earliest"
+      SASL_MECHANISM: PLAIN
+      SASL_PLAIN_USERNAME: admin
+      SASL_PLAIN_PASSWORD: admin-secret
+      DEBUG: "false"
+    volumes:
+      - ${PWD}/:/go/src/github.com/cainelli/opa-firewall
+    working_dir: /go/src/github.com/cainelli/opa-firewall/
+    command: "-c ./config/development/air-policy-enforcer.conf"
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     environment:

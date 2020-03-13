@@ -26,6 +26,22 @@ func NewProducer() (*kafka.Producer, error) {
 	return kafka.NewProducer(librdConfig)
 }
 
+// NewConsumer ...
+func NewConsumer() (*kafka.Consumer, error) {
+	configuration, err := autoDiscovery()
+	if err != nil {
+		return nil, err
+	}
+
+	librdConfig, err := NewLibrdConfigMap(configuration)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return kafka.NewConsumer(librdConfig)
+}
+
 func environmentOrDefault(environmentName string, defaulValue string) string {
 	if os.Getenv(environmentName) != "" {
 		return os.Getenv(environmentName)
@@ -65,7 +81,6 @@ func NewLibrdConfigMap(configuration *Configuration) (*kafka.ConfigMap, error) {
 		"sasl.mechanism":          configuration.SASLMechanism,
 		"sasl.username":           configuration.SASLPlainUsername,
 		"socket.keepalive.enable": true,
-		"go.delivery.reports":     false,
 		"log.connection.close":    false,
 		"request.required.acks":   "all", // This is the default value for librdkafka, set here to be explicit
 		"linger.ms":               0,     // Do not attempt to batch messages together before producing (default 0.5ms)

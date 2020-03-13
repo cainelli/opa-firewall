@@ -18,11 +18,9 @@ func New(policies []PolicyInterface, logger *logrus.Logger) *PolicyController {
 		panic(err)
 	}
 	return &PolicyController{
-		Logger:          logger,
-		Policies:        policies,
-		Producer:        producer,
-		EventsTopicName: "firewall-events",
-		PolicyTopicName: "firewall-policies",
+		Logger:   logger,
+		Policies: policies,
+		Producer: producer,
 	}
 }
 
@@ -104,9 +102,10 @@ func (controller *PolicyController) SendPolicyEvent(event firewall.PolicyEvent) 
 		return err
 	}
 
-	controller.Logger.Infof("producing policy event to %s", controller.PolicyTopicName)
+	topicName := firewall.PolicyTopicName
+	controller.Logger.Infof(string(policyEventBytes))
 	controller.Producer.Produce(&kafka.Message{
-		TopicPartition: kafka.TopicPartition{Topic: &controller.PolicyTopicName},
+		TopicPartition: kafka.TopicPartition{Topic: &topicName},
 		Value:          policyEventBytes,
 	}, deliveryChan)
 

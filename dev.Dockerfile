@@ -1,9 +1,20 @@
-FROM cosmtrek/air
+FROM golang:1.13-alpine
 
-RUN wget -qO - http://packages.confluent.io/deb/3.1/archive.key | apt-key add -
+RUN apk add git
 
-RUN apt-get update && apt-get install software-properties-common -y
+RUN go get -u github.com/cosmtrek/air
 
-RUN add-apt-repository "deb [arch=amd64] http://packages.confluent.io/deb/3.1 stable main"
+RUN apk add pkgconfig \
+      bash              \
+      gcc			\
+      git 			\
+      librdkafka-dev    \
+      libressl-dev      \
+      musl-dev          \
+      dep               \
+      zlib-dev
 
-RUN apt-get update &&  apt-get install librdkafka-dev -y
+
+ENV PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:/usr/lib/"
+
+ENTRYPOINT [ "/go/bin/air" ]

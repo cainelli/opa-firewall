@@ -14,11 +14,9 @@ import (
 
 // PolicyController ...
 type PolicyController struct {
-	Logger          *logrus.Logger
-	Policies        []PolicyInterface
-	Producer        *kafka.Producer
-	PolicyTopicName string
-	EventsTopicName string
+	Logger   *logrus.Logger
+	Policies []PolicyInterface
+	Producer *kafka.Producer
 }
 
 // IngressEvent defines the event struct sent during the request cycle

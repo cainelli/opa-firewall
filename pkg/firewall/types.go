@@ -58,3 +58,10 @@ type Configuration struct {
 	IsEnabled bool
 	DryRun    bool
 }
+
+const (
+	// PolicyTopicName ...
+	PolicyTopicName = "firewall-policies"
+	// EventsTopicName ...
+	EventsTopicName = "firewall-events"
+)
