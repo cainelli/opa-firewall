@@ -16,9 +16,6 @@ type IPTree struct {
 	IPv6 *iradix.Tree
 }
 
-// IPBuckets ...
-type IPBuckets interface{}
-
 // FlatJSON ...
 type FlatJSON struct {
 	IPv4 map[string]time.Time `json:"ipv4"`
@@ -46,6 +43,14 @@ func (ipTree *IPTree) GetIP(ip net.IP) (time.Time, bool) {
 		return expireAt.(time.Time), ok
 	}
 	return time.Time{}, false
+}
+
+// TODO cleanup old entries
+func garbageCollector() {}
+
+// AddCIDR TODO
+func (ipTree *IPTree) AddCIDR() error {
+	return fmt.Errorf("not implemented")
 }
 
 // AddIP ...

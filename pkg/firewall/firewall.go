@@ -1,107 +1,41 @@
 package firewall
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"reflect"
 	"strings"
 	"time"
 
-	"github.com/ghodss/yaml"
-	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/rego"
-	"github.com/open-policy-agent/opa/storage"
-	"github.com/open-policy-agent/opa/storage/inmem"
+	"github.com/sirupsen/logrus"
 )
 
-// GetStaticPolicies ...
-func GetStaticPolicies() ([]*PolicyEvent, error) {
-	policyPath := "./policies"
-	files, err := ioutil.ReadDir(policyPath)
-	if err != nil {
-		return []*PolicyEvent{}, err
-	}
-
-	policies := []*PolicyEvent{}
-	for _, file := range files {
-		policyEvent := &PolicyEvent{}
-		policyBytes, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", policyPath, file.Name()))
-		if err != nil {
-			fmt.Printf("could not open file %s: %v", file.Name(), err)
-			continue
-		}
-		err = yaml.Unmarshal(policyBytes, policyEvent)
-		if err != nil {
-			fmt.Printf("error unmarshaling policy %s", file.Name())
-			continue
-		}
-		policies = append(policies, policyEvent)
-	}
-	return policies, nil
-}
-
-// TestRego validates if the rego string from event is valid
-func TestRego(rego string) error {
-	combined := fmt.Sprintf("package firewall\n%s", rego)
-	_, err := ast.CompileModules(map[string]string{"firewall": combined})
-
-	return err
-}
-
-// CompilePolicies ...
-func CompilePolicies(policies []*PolicyEvent) (*ast.Compiler, storage.Store) {
-	stores := make(map[string]interface{})
-	combinedRego := "package firewall"
-
-	for _, policy := range policies {
-		// test module before adding it to the map.
-		if err := TestRego(policy.Rego); err != nil {
-			log.Printf("could not parse rego of %s: %s", policy.Name, err)
-		}
-		combinedRego = fmt.Sprintf("%s\n%s", combinedRego, policy.Rego)
-
-		// test if data is json compatible.
-		_, err := json.Marshal(policy.Data)
-		if err != nil {
-			log.Fatal(err)
-		} else if policy.Data != nil {
-			stores[policy.Name] = policy.Data
-		}
-	}
-
-	compiledModules, err := ast.CompileModules(map[string]string{"firewall": combinedRego})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	dataJSON, err := json.Marshal(stores)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("data:%v", string(dataJSON))
-	store := inmem.NewFromReader(bytes.NewBuffer(dataJSON))
-
-	return compiledModules, store
-}
-
 // New initialized the firewall handler
-func New() *Firewall {
+func New(logger *logrus.Logger) *Firewall {
 	policies, err := GetStaticPolicies()
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Printf("%v policies\n", len(policies))
-	compilers, store := CompilePolicies(policies)
-	return &Firewall{
-		Compilers: compilers,
-		Store:     store,
+
+	firewall := &Firewall{
+		Logger:          logger,
+		Policies:        policies,
+		CompileInterval: 5 * time.Second, // TODO: make it configurable and fix interval before production
 	}
+
+	compilers, store, ipTrees := firewall.CompilePolicies(policies)
+	firewall.Compilers = compilers
+	firewall.Store = store
+	firewall.IPTrees = ipTrees
+
+	go firewall.ConsumePolicies()
+	go firewall.periodicallyCompilePolicies()
+
+	return firewall
 }
 
 // OnRequest handler for firewall functionality
@@ -190,11 +124,11 @@ func (firewall *Firewall) Evaluate() (bool, error) {
 							}
 						}
 					default:
-						log.Printf("%s data type (%v) not supported: %v", moduleName, reflect.TypeOf(data), InterfaceToString(data))
+						log.Printf("%s data type (%v) not supported: %v", moduleName, reflect.TypeOf(data), interfaceToString(data))
 					}
 				}
 			default:
-				log.Printf("expression value type (%v) not supported: %v", reflect.TypeOf(result), InterfaceToString(result))
+				log.Printf("expression value type (%v) not supported: %v", reflect.TypeOf(result), interfaceToString(result))
 			}
 		}
 	}
@@ -210,8 +144,8 @@ func (firewall *Firewall) Evaluate() (bool, error) {
 	return true, nil
 }
 
-// InterfaceToString ...
-func InterfaceToString(i interface{}) string {
+// interfaceToString ...
+func interfaceToString(i interface{}) string {
 	bytes, err := json.Marshal(i)
 	if err != nil {
 		log.Printf("could not marshal interface %v", i)

@@ -3,16 +3,22 @@ package firewall
 import (
 	"time"
 
+	"github.com/cainelli/opa-firewall/pkg/iptree"
 	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/storage"
+	"github.com/sirupsen/logrus"
 )
 
 // Firewall defines the data structure used by firewall handler
 type Firewall struct {
-	Configuration *Configuration
-	Input         map[string]interface{}
-	Compilers     *ast.Compiler
-	Store         storage.Store
+	Configuration   *Configuration
+	Logger          *logrus.Logger
+	Input           map[string]interface{}
+	Compilers       *ast.Compiler
+	Store           storage.Store
+	IPTrees         IPTrees
+	Policies        map[string]PolicyEvent
+	CompileInterval time.Duration
 }
 
 const (
@@ -21,6 +27,9 @@ const (
 	// EventTypeFull ...
 	EventTypeFull = "FULL"
 )
+
+//IPTrees is a map where key is the bucket name and value the iptree for the given bucket
+type IPTrees map[string]*iptree.IPTree
 
 // PolicyEvent ...
 type PolicyEvent struct {
@@ -50,8 +59,11 @@ type PolicyEvent struct {
 	IPBuckets IPBuckets `json:"ipbuckets,omitempty" yaml:"ipbuckets"`
 }
 
-// IPBuckets ...
-type IPBuckets map[string]map[string]time.Time
+// IPBuckets key is bucketName ...
+type IPBuckets map[string]IPBucket
+
+// IPBucket key is ip, value is expiration time ...
+type IPBucket map[string]time.Time
 
 // Configuration defines the configuration section for firewall handler
 type Configuration struct {

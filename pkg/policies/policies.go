@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"time"
 
 	"github.com/cainelli/opa-firewall/pkg/firewall"
 	"github.com/cainelli/opa-firewall/pkg/stream"
@@ -17,11 +18,17 @@ func New(policies []PolicyInterface, logger *logrus.Logger) *PolicyController {
 	if err != nil {
 		panic(err)
 	}
-	return &PolicyController{
-		Logger:   logger,
-		Policies: policies,
-		Producer: producer,
+	policyController := &PolicyController{
+		Logger:             logger,
+		Policies:           policies,
+		Producer:           producer,
+		syncPolicyInterval: 15 * time.Second, // TODO: make it configurable and fix interval before production
 	}
+
+	go policyController.periodicallySyncPolicies()
+
+	return policyController
+
 }
 
 // Run ...
@@ -116,4 +123,35 @@ func (controller *PolicyController) SendPolicyEvent(event firewall.PolicyEvent) 
 	}
 
 	return err
+}
+
+func (controller *PolicyController) periodicallySyncPolicies() {
+	for {
+		select {
+		case <-time.After(controller.syncPolicyInterval):
+			for _, policy := range controller.Policies {
+				policyEvent, err := policy.Get()
+				if err != nil {
+					controller.Logger.Error(err)
+					continue
+				}
+
+				if policyEvent.Type != firewall.EventTypeFull {
+					controller.Logger.Errorf("expected %s event type for policy %s", firewall.EventTypeFull, policy.Name())
+					continue
+				}
+
+				if policyEvent.Rego == "" {
+					controller.Logger.Errorf("rego policy not found for policy %s", policy.Name())
+					continue
+				}
+
+				err = controller.SendPolicyEvent(policyEvent)
+				if err != nil {
+					controller.Logger.Error(err)
+					continue
+				}
+			}
+		}
+	}
 }

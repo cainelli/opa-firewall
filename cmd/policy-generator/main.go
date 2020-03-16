@@ -14,13 +14,13 @@ func main() {
 	log.Print("initializing server")
 
 	logger := logrus.New()
+	policyController := policies.New([]policies.PolicyInterface{
+		nouseragent.New(logger),
+	}, logger)
 
 	for {
 		select {
 		case <-time.After(5 * time.Second):
-			policyController := policies.New([]policies.PolicyInterface{
-				nouseragent.New(logger),
-			}, logger)
 
 			policyController.Run()
 		}

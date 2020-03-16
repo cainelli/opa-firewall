@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/cainelli/opa-firewall/pkg/firewall"
-	"github.com/cainelli/opa-firewall/pkg/iptree"
 	"github.com/cainelli/opa-firewall/pkg/policies"
 	"github.com/cainelli/opa-firewall/pkg/ratelimiter"
 	"github.com/patrickmn/go-cache"
@@ -17,8 +16,8 @@ import (
 type Policy struct {
 	policies.Policy
 
-	IPBuckets iptree.IPBuckets
-	Cache     *cache.Cache
+	IPBuckets firewall.IPBuckets
+	Cache     map[string]*cache.Cache
 	Data      *PolicyData
 }
 
@@ -34,7 +33,9 @@ type PolicyData struct {
 // New initializes the policy
 func New(logger *logrus.Logger) policies.PolicyInterface {
 	policy := &Policy{
-		Cache: cache.New(5*time.Minute, 5*time.Minute),
+		Cache: map[string]*cache.Cache{
+			BlackListIPBucketName: cache.New(5*time.Minute, 5*time.Minute),
+		},
 	}
 
 	rateLimiter := ratelimiter.NewRateLimiter(rate.Every(time.Second*2), 1)
@@ -81,8 +82,8 @@ func (policy *Policy) Process(event *policies.IngressEvent) (firewall.PolicyEven
 	if !allowed {
 		// skip if policy was already returned for this IP but keeps falling into rate limit.
 		// TODO: maybe rate limiter provides something in these lines.
-		if _, ok := policy.Cache.Get(event.IP); !ok {
-			policy.Cache.Set(event.IP, true, policy.BlockDuration)
+		if _, ok := policy.Cache[BlackListIPBucketName].Get(event.IP); !ok {
+			policy.Cache[BlackListIPBucketName].Set(event.IP, true, policy.BlockDuration)
 
 			return firewall.PolicyEvent{
 				Name: policy.Name(),
@@ -100,20 +101,24 @@ func (policy *Policy) Process(event *policies.IngressEvent) (firewall.PolicyEven
 
 }
 
-// GetPolicyEvent returns a PolicyEvent to be sent to the firewall if the request is suspecious
-func (policy *Policy) GetPolicyEvent(event *policies.IngressEvent) (firewall.PolicyEvent, error) {
+// Get returns a PolicyEvent to be sent to the firewall if the request is suspecious
+// TODO: add the data from cache.
+func (policy *Policy) Get() (firewall.PolicyEvent, error) {
 	return firewall.PolicyEvent{
 		Name: policy.Name(),
+		IPBuckets: firewall.IPBuckets{
+			BlackListIPBucketName: policy.GetIPBucketFromCache(policy.Cache[BlackListIPBucketName]),
+		},
 		Type: firewall.EventTypeFull,
 		Rego: `
 deny {
-	startswith(input.host, www.)
-	ip_in_tree(input.ip, blacklist)
+	startswith(input.host, "www.")
+	
 }
 
 deny {
-	startswith(input.host, activities.)
-	ip_in_tree(input.ip, blacklist)
+	startswith(input.host, "activities.")
+	
 }
 `,
 	}, nil

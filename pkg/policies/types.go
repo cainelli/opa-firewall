@@ -9,14 +9,16 @@ import (
 	"github.com/cainelli/opa-firewall/pkg/firewall"
 	"github.com/cainelli/opa-firewall/pkg/ratelimiter"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/patrickmn/go-cache"
 	"github.com/sirupsen/logrus"
 )
 
 // PolicyController ...
 type PolicyController struct {
-	Logger   *logrus.Logger
-	Policies []PolicyInterface
-	Producer *kafka.Producer
+	Logger             *logrus.Logger
+	Policies           []PolicyInterface
+	Producer           *kafka.Producer
+	syncPolicyInterval time.Duration
 }
 
 // IngressEvent defines the event struct sent during the request cycle
@@ -43,8 +45,8 @@ type PolicyInterface interface {
 	// typically look at the request and record some data about it in a shared
 	// cache
 	Process(event *IngressEvent) (firewall.PolicyEvent, error)
-	// Returns a policy event containing the full data.
-	GetPolicyEvent(event *IngressEvent) (firewall.PolicyEvent, error)
+	// Get returns a policy event containing the full data.
+	Get() (firewall.PolicyEvent, error)
 	// Name returns the name of the Policy being implemented.
 	Name() string
 }
@@ -77,4 +79,13 @@ func (policy *Policy) ConvertEventTime(timeString string) (time.Time, error) {
 
 	return time.Unix(unixTimeStamp, nanoseconds), nil
 
+}
+
+// GetIPBucketFromCache ...
+func (policy *Policy) GetIPBucketFromCache(cache *cache.Cache) firewall.IPBucket {
+	ipBucket := make(firewall.IPBucket)
+	for ip, item := range cache.Items() {
+		ipBucket[ip] = time.Unix(0, item.Expiration)
+	}
+	return ipBucket
 }
