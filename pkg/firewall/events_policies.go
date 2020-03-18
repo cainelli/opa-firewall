@@ -3,6 +3,8 @@ package firewall
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"time"
 
 	"github.com/cainelli/opa-firewall/pkg/stream"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
@@ -40,8 +42,26 @@ func (firewall *Firewall) ConsumePolicies() {
 					continue
 				}
 				// TODO: patch store if data policy.Data changes
-				// TODO: patch ip data tree if policy.IPBuckets change
-				firewall.Logger.Errorf("%s event type not implemented", policyEvent.Type)
+
+				// updates iptree
+				for bucketName, bucket := range policyEvent.IPBuckets {
+					ipTree := firewall.getIPTreeOrNew(policyEvent.Name, bucketName)
+
+					for ipString, expireAt := range bucket {
+						ip := net.ParseIP(ipString)
+						if time.Now().After(expireAt) {
+							firewall.Logger.Infof("(expired entry) ip %s to iptree[%s][%s] expiring at: %v", ip, policyEvent.Name, bucketName, expireAt)
+							continue
+						}
+						firewall.Logger.Infof("(patching) adding ip %s to iptree[%s][%s] expiring at: %v", ip, policyEvent.Name, bucketName, expireAt)
+						err := ipTree.AddIP(ip, expireAt)
+						if err != nil {
+							firewall.Logger.Error(err)
+							continue
+						}
+					}
+				}
+
 			default:
 				firewall.Logger.Errorf("%s event type not implemented", policyEvent.Type)
 			}
@@ -50,7 +70,6 @@ func (firewall *Firewall) ConsumePolicies() {
 		}
 	}
 
-	consumer.Close()
 }
 
 func unmarshalPolicyEvent(event *kafka.Message) (*PolicyEvent, error) {
@@ -74,7 +93,7 @@ func isValidPolicy(policyEvent *PolicyEvent, policyType string) error {
 	}
 
 	if policyEvent.Type == "" {
-		return fmt.Errorf("missing event type for policy", policyEvent.Name)
+		return fmt.Errorf("missing event type for policy %s", policyEvent.Name)
 	}
 
 	switch policyType {

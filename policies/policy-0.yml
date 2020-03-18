@@ -1,13 +1,14 @@
 
 ---
-name: supplier0
+name: supplier
 type: full
 rego: |
-  package supplier0
+  package supplier
   deny {
-    input.host = "supplier0.domain.com"
-    input.path = "/login-0"
-    input.ip = "1.1.1.0"
+    input.host = "supplier.getyourguide.com"
+    in_tree("supplier", "blacklist", input.ip)
   }
-data:
-  blacklist: []
+data: {}
+ipbuckets:
+  blacklist:
+    "1.1.1.1": "2020-03-19T15:50:16.3114833Z"

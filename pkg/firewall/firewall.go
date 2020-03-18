@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cainelli/opa-firewall/pkg/iptree"
 	"github.com/open-policy-agent/opa/rego"
 	"github.com/sirupsen/logrus"
 )
@@ -36,7 +37,7 @@ func New(logger *logrus.Logger) *Firewall {
 	return firewall
 }
 
-// OnRequest ~~handler for firewall functionality
+// OnRequest ...
 func (firewall *Firewall) OnRequest(writer http.ResponseWriter, request *http.Request) {
 	status := http.StatusOK
 
@@ -77,18 +78,6 @@ func (firewall *Firewall) Evaluate(input map[string]interface{}) (bool, error) {
 		firewall.Logger.Error(err)
 	}
 
-	elapsed := time.Since(start)
-	firewall.Logger.Infof("after eval %s", elapsed)
-
-	// Inspect results.
-	fmt.Println("len:", len(resultSet))
-	if len(resultSet) > 0 {
-		// Do something with result.
-		fmt.Println("value:", resultSet[0].Bindings)
-
-		fmt.Println("value:", resultSet[0].Expressions[0])
-	}
-
 	// no result allows traffic
 	if len(resultSet) == 0 {
 		return true, nil
@@ -118,6 +107,9 @@ func (firewall *Firewall) Evaluate(input map[string]interface{}) (bool, error) {
 							switch value := found.(type) {
 							case bool:
 								deny = value
+								if deny {
+									firewall.Logger.Infof("request blocked by module %s", moduleName)
+								}
 							default:
 								log.Printf("%s result type (%v) not supported for %v", moduleName, reflect.TypeOf(value), value)
 							}
@@ -132,7 +124,7 @@ func (firewall *Firewall) Evaluate(input map[string]interface{}) (bool, error) {
 		}
 	}
 
-	elapsed = time.Since(start)
+	elapsed := time.Since(start)
 	log.Printf("total took %s", elapsed)
 
 	if deny == true && allow == false {
@@ -141,6 +133,19 @@ func (firewall *Firewall) Evaluate(input map[string]interface{}) (bool, error) {
 
 	// no deny rule allows traffic
 	return true, nil
+}
+
+func (firewall *Firewall) getIPTreeOrNew(policyName, bucketName string) *iptree.IPTree {
+	if _, ok := firewall.IPTrees[policyName]; !ok {
+		firewall.IPTrees[policyName] = map[string]*iptree.IPTree{}
+	}
+
+	if _, ok := firewall.IPTrees[policyName][bucketName]; !ok {
+		firewall.Logger.Infof("initializing iptree[%s][%s]", policyName, bucketName)
+		firewall.IPTrees[policyName][bucketName] = iptree.New()
+	}
+
+	return firewall.IPTrees[policyName][bucketName]
 }
 
 // interfaceToString ...
