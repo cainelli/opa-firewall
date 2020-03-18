@@ -16,15 +16,15 @@ func (firewall *Firewall) periodicallyCompile() {
 	for {
 		select {
 		case <-time.After(10 * time.Second):
-			firewall.Logger.Info("recompiling rules")
+			firewall.Logger.Info("starting recompiling rules")
 			firewall.Compile()
+			firewall.Logger.Info("finished recompiling rules")
 		}
 	}
 }
 
 // Compile ...
 // TODO:
-//   * build IP tree
 //   * gracefully handle errors
 func (firewall *Firewall) Compile() {
 	regoFunctions := []func(r *rego.Rego){
@@ -45,7 +45,7 @@ func (firewall *Firewall) Compile() {
 		// test if data is json compatible.
 		_, err := json.Marshal(policy.Data)
 		if err != nil {
-			// log error
+			firewall.Logger.Error(err)
 			continue
 		} else if policy.Data != nil {
 			stores[policy.Name] = policy.Data
@@ -56,14 +56,19 @@ func (firewall *Firewall) Compile() {
 				ipTree := iptree.New()
 				for ipString, expireAt := range bucket {
 					ip := net.ParseIP(ipString)
+
+					firewall.Logger.Infof("adding ip %s to iptree[%s][%s] expiring at: %v", ip, policy.Name, bucketName, expireAt)
 					err := ipTree.AddIP(ip, expireAt)
 					if err != nil {
 						firewall.Logger.Error(err)
 						continue
 					}
-
-					firewall.Logger.Infof("bucket: %s ip: %v, expireAt: %v", bucketName, ip, expireAt)
 				}
+
+				if _, ok := ipTrees[policy.Name]; !ok {
+					ipTrees[policy.Name] = map[string]*iptree.IPTree{}
+				}
+				ipTrees[policy.Name][bucketName] = ipTree
 			}
 
 		}

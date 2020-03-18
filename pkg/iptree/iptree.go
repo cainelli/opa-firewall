@@ -36,11 +36,13 @@ func New() *IPTree {
 func (ipTree *IPTree) GetIP(ip net.IP) (time.Time, bool) {
 	switch {
 	case ipTree.isIPv4(ip):
-		expireAt, ok := ipTree.IPv4.Get([]byte(ip.String()))
-		return expireAt.(time.Time), ok
+		if expireAt, ok := ipTree.IPv4.Get([]byte(ip.String())); ok {
+			return expireAt.(time.Time), ok
+		}
 	case ipTree.isIPv6(ip):
-		expireAt, ok := ipTree.IPv6.Get([]byte(ip.String()))
-		return expireAt.(time.Time), ok
+		if expireAt, ok := ipTree.IPv6.Get([]byte(ip.String())); ok {
+			return expireAt.(time.Time), ok
+		}
 	}
 	return time.Time{}, false
 }

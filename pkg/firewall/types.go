@@ -27,8 +27,8 @@ const (
 	EventTypeFull = "FULL"
 )
 
-//IPTrees is a map where key is the bucket name and value the iptree for the given bucket
-type IPTrees map[string]*iptree.IPTree
+//IPTrees is a map where first key is the policyName, the second the bucket name its value is the iptree for the given bucket
+type IPTrees map[string]map[string]*iptree.IPTree
 
 // PolicyEvent ...
 type PolicyEvent struct {

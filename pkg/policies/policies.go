@@ -110,7 +110,10 @@ func (controller *PolicyController) SendPolicyEvent(event firewall.PolicyEvent) 
 	}
 
 	topicName := firewall.PolicyTopicName
-	controller.Logger.Infof(string(policyEventBytes))
+
+	// TODO: cleanup logging
+	controller.Logger.Infof("sending event: %s", string(policyEventBytes))
+
 	controller.Producer.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topicName},
 		Value:          policyEventBytes,

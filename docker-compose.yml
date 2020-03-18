@@ -17,8 +17,8 @@ services:
       - ${PWD}/:/go/src/github.com/cainelli/opa-firewall
     working_dir: /go/src/github.com/cainelli/opa-firewall/
     command: "-c ./config/development/air-policy-generator.conf"
-    logging:
-      driver: "none"
+    # logging:
+    #   driver: "none"
   policy-enforcer:
     depends_on:
       - kafka

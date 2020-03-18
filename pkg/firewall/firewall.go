@@ -36,7 +36,7 @@ func New(logger *logrus.Logger) *Firewall {
 	return firewall
 }
 
-// OnRequest handler for firewall functionality
+// OnRequest ~~handler for firewall functionality
 func (firewall *Firewall) OnRequest(writer http.ResponseWriter, request *http.Request) {
 	status := http.StatusOK
 
@@ -68,7 +68,7 @@ func (firewall *Firewall) OnRequest(writer http.ResponseWriter, request *http.Re
 }
 
 // Evaluate ...
-func (firewall *Firewall) Evaluate(input string) (bool, error) {
+func (firewall *Firewall) Evaluate(input map[string]interface{}) (bool, error) {
 	start := time.Now()
 
 	// Run evaluation.
