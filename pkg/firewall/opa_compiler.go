@@ -4,45 +4,42 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"time"
 
 	"github.com/cainelli/opa-firewall/pkg/iptree"
-	"github.com/open-policy-agent/opa/ast"
-	"github.com/open-policy-agent/opa/storage"
+	"github.com/open-policy-agent/opa/rego"
 	"github.com/open-policy-agent/opa/storage/inmem"
 )
 
-func (firewall *Firewall) periodicallyCompilePolicies() {
+func (firewall *Firewall) periodicallyCompile() {
 	for {
 		select {
 		case <-time.After(10 * time.Second):
 			firewall.Logger.Info("recompiling rules")
-			compilers, store, ipTrees := firewall.CompilePolicies(firewall.Policies)
-			firewall.Store = store
-			firewall.Compilers = compilers
-			firewall.IPTrees = ipTrees
+			firewall.Compile()
 		}
 	}
 }
 
-// CompilePolicies ...
+// Compile ...
 // TODO:
-//   * run periodically CompileInterval
 //   * build IP tree
 //   * gracefully handle errors
-func (firewall *Firewall) CompilePolicies(policies map[string]PolicyEvent) (*ast.Compiler, storage.Store, IPTrees) {
+func (firewall *Firewall) Compile() {
+	regoFunctions := []func(r *rego.Rego){
+		rego.Query(fmt.Sprintf("data")),
+		firewall.registerCustomBultin(),
+	}
 	stores := make(map[string]interface{})
 	ipTrees := make(IPTrees)
-	combinedRego := "package firewall"
 
 	// TODO: implement mutex to avoid race conditions
-	for _, policy := range policies {
+	for _, policy := range firewall.Policies {
 		// test module before adding it to the map.
 		if err := testRego(policy.Rego); err != nil {
-			log.Printf("could not parse rego of %s (skipping): %s ", policy.Name, err)
-			continue
+			// TODO: fix testRego and skip on error.
+			// continue
 		}
 
 		// test if data is json compatible.
@@ -70,21 +67,31 @@ func (firewall *Firewall) CompilePolicies(policies map[string]PolicyEvent) (*ast
 			}
 
 		}
-		combinedRego = fmt.Sprintf("%s\n%s", combinedRego, policy.Rego)
-	}
 
-	compiledModules, err := ast.CompileModules(map[string]string{"firewall": combinedRego})
-	if err != nil {
-		log.Fatal(err)
+		regoFunctions = append(regoFunctions, rego.Package(policy.Name))
+		regoFunctions = append(regoFunctions, rego.Module(policy.Name, policy.Rego))
 	}
 
 	dataJSON, err := json.Marshal(stores)
 	if err != nil {
-		log.Fatal(err)
+		firewall.Logger.Error(err)
+		return
 	}
 
-	log.Printf("data:%v", string(dataJSON))
 	store := inmem.NewFromReader(bytes.NewBuffer(dataJSON))
+	regoFunctions = append(regoFunctions, rego.Store(store))
 
-	return compiledModules, store, ipTrees
+	regoFunctions = append(regoFunctions)
+	r := rego.New(
+		regoFunctions...,
+	)
+
+	preparedEval, err := r.PrepareForEval(firewall.context)
+	if err != nil {
+		firewall.Logger.Error(err)
+		return
+	}
+
+	firewall.PreparedEval = preparedEval
+	firewall.IPTrees = ipTrees
 }

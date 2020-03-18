@@ -25,15 +25,13 @@ func New(logger *logrus.Logger) *Firewall {
 		Logger:          logger,
 		Policies:        policies,
 		CompileInterval: 5 * time.Second, // TODO: make it configurable and fix interval before production
+		context:         context.Background(),
 	}
 
-	compilers, store, ipTrees := firewall.CompilePolicies(policies)
-	firewall.Compilers = compilers
-	firewall.Store = store
-	firewall.IPTrees = ipTrees
+	firewall.Compile()
 
 	go firewall.ConsumePolicies()
-	go firewall.periodicallyCompilePolicies()
+	go firewall.periodicallyCompile()
 
 	return firewall
 }
@@ -47,7 +45,7 @@ func (firewall *Firewall) OnRequest(writer http.ResponseWriter, request *http.Re
 		normalizedHeaders[strings.ToLower(header)] = values
 	}
 
-	firewall.Input = map[string]interface{}{
+	input := map[string]interface{}{
 		"host":    request.Host,
 		"method":  request.Method,
 		"path":    request.URL.Path,
@@ -55,9 +53,9 @@ func (firewall *Firewall) OnRequest(writer http.ResponseWriter, request *http.Re
 		"ip":      request.Header.Get("x-forwarded-for"),
 	}
 
-	allow, err := firewall.Evaluate()
+	allow, err := firewall.Evaluate(input)
 	if err != nil {
-		log.Print(err)
+		firewall.Logger.Error(err)
 	}
 	if !allow {
 		status = http.StatusTooManyRequests
@@ -65,30 +63,31 @@ func (firewall *Firewall) OnRequest(writer http.ResponseWriter, request *http.Re
 
 	writer.WriteHeader(status)
 
-	_, _ = fmt.Fprintln(writer, firewall.Input)
+	_, _ = fmt.Fprintln(writer, input)
 	_, _ = fmt.Fprintln(writer, fmt.Sprintf("response:%d", status))
 }
 
 // Evaluate ...
-func (firewall *Firewall) Evaluate() (bool, error) {
-	ctx := context.Background()
+func (firewall *Firewall) Evaluate(input string) (bool, error) {
 	start := time.Now()
 
-	rego := rego.New(
-		rego.Query(fmt.Sprintf("data")),
-		rego.Compiler(firewall.Compilers),
-		rego.Input(firewall.Input),
-		rego.Store(firewall.Store),
-	)
-
 	// Run evaluation.
-	resultSet, err := rego.Eval(ctx)
+	resultSet, err := firewall.PreparedEval.Eval(firewall.context, rego.EvalInput(input))
 	if err != nil {
-		log.Print("err:", err)
+		firewall.Logger.Error(err)
 	}
 
 	elapsed := time.Since(start)
-	log.Printf("after eval %s", elapsed)
+	firewall.Logger.Infof("after eval %s", elapsed)
+
+	// Inspect results.
+	fmt.Println("len:", len(resultSet))
+	if len(resultSet) > 0 {
+		// Do something with result.
+		fmt.Println("value:", resultSet[0].Bindings)
+
+		fmt.Println("value:", resultSet[0].Expressions[0])
+	}
 
 	// no result allows traffic
 	if len(resultSet) == 0 {

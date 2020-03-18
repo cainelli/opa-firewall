@@ -3,6 +3,7 @@
 name: supplier0
 type: full
 rego: |
+  package supplier0
   deny {
     input.host = "supplier0.domain.com"
     input.path = "/login-0"

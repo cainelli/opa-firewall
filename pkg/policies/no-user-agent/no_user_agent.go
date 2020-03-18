@@ -111,14 +111,14 @@ func (policy *Policy) Get() (firewall.PolicyEvent, error) {
 		},
 		Type: firewall.EventTypeFull,
 		Rego: `
+package nouseragent
+
 deny {
-	startswith(input.host, "www.")
-	
+	startswith(input.host, "www.")	
 }
 
 deny {
-	startswith(input.host, "activities.")
-	
+	in_tree("nouseragent", "blacklist", input.ip)
 }
 `,
 	}, nil

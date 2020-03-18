@@ -61,9 +61,9 @@ func unmarshalPolicyEvent(event *kafka.Message) (*PolicyEvent, error) {
 }
 
 // testRego validates if the rego string from event is valid
+// TODO: fix custom built in function errors
 func testRego(rego string) error {
-	combined := fmt.Sprintf("package firewall\n%s", rego)
-	_, err := ast.CompileModules(map[string]string{"firewall": combined})
+	_, err := ast.CompileModules(map[string]string{"firewall": rego})
 
 	return err
 }
