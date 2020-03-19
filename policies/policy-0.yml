@@ -1,0 +1,14 @@
+
+---
+name: supplier
+type: full
+rego: |
+  package supplier
+  deny {
+    input.host = "supplier.getyourguide.com"
+    in_tree("supplier", "blacklist", input.ip)
+  }
+data: {}
+ipbuckets:
+  blacklist:
+    "1.1.1.1": "2020-03-19T15:50:16.3114833Z"
