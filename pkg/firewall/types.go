@@ -11,13 +11,16 @@ import (
 
 // Firewall defines the data structure used by firewall handler
 type Firewall struct {
-	Configuration   *Configuration
-	Logger          *logrus.Logger
-	PreparedEval    rego.PreparedEvalQuery
-	IPTrees         IPTrees
-	Policies        map[string]PolicyEvent
-	CompileInterval time.Duration
-	context         context.Context
+	Configuration    *Configuration
+	Logger           *logrus.Logger
+	PreparedEval     rego.PreparedEvalQuery
+	IPTrees          IPTrees
+	Policies         map[string]PolicyEvent
+	PoliciesBacklog  int
+	CompileInterval  time.Duration
+	context          context.Context
+	warmedUp         chan bool
+	startedConsuming bool
 }
 
 const (

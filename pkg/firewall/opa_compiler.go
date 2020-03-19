@@ -15,10 +15,11 @@ import (
 func (firewall *Firewall) periodicallyCompile() {
 	for {
 		select {
-		case <-time.After(10 * time.Second):
+		case <-time.After(1 * time.Minute):
+			start := time.Now()
 			firewall.Logger.Info("starting recompiling rules")
 			firewall.Compile()
-			firewall.Logger.Info("finished recompiling rules")
+			firewall.Logger.Infof("finished recompiling rules (took %s)", time.Since(start))
 		}
 	}
 }

@@ -1,7 +1,6 @@
 package iptree
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -76,8 +75,8 @@ func (ipTree *IPTree) isIPv6(ip net.IP) bool {
 	return strings.Count(ip.String(), ":") >= 2
 }
 
-// ToFlatJSONString returns the tree represented in a flat JSON format.
-func (ipTree *IPTree) ToFlatJSONString() (string, error) {
+// ToFlatJSON returns the tree represented in a flat JSON format.
+func (ipTree *IPTree) ToFlatJSON() (FlatJSON, error) {
 	flatJSON := FlatJSON{
 		IPv4: make(map[string]time.Time),
 		IPv6: make(map[string]time.Time),
@@ -93,10 +92,5 @@ func (ipTree *IPTree) ToFlatJSONString() (string, error) {
 		flatJSON.IPv6[string(key)] = expireAt.(time.Time)
 	}
 
-	jsonBytes, err := json.Marshal(flatJSON)
-	if err != nil {
-		return "", err
-	}
-
-	return string(jsonBytes), nil
+	return flatJSON, nil
 }

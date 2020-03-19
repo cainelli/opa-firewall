@@ -20,6 +20,7 @@ func (firewall *Firewall) registerCustomBultin() func(r *rego.Rego) {
 }
 
 func (firewall *Firewall) builtinInTree(_ rego.BuiltinContext, policyName, treeName, ip *ast.Term) (*ast.Term, error) {
+	firewall.Logger.Info("built_in_tree called")
 	if _, ok := policyName.Value.(ast.String); !ok {
 		return nil, nil
 	}

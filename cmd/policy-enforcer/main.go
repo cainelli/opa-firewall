@@ -13,6 +13,8 @@ func main() {
 
 	handler := firewall.New(logger)
 	http.HandleFunc("/", handler.OnRequest)
+	http.HandleFunc("/iptrees", handler.DumpIPTrees)
+	http.HandleFunc("/policies", handler.DumpPolicies)
 
 	log.Print("server ready")
 	http.ListenAndServe(":8080", nil)

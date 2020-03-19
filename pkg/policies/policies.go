@@ -25,10 +25,11 @@ func New(policies []PolicyInterface, logger *logrus.Logger) *PolicyController {
 		syncPolicyInterval: 15 * time.Second, // TODO: make it configurable and fix interval before production
 	}
 
+	policyController.syncPolicies()
+
 	go policyController.periodicallySyncPolicies()
 
 	return policyController
-
 }
 
 // Run ...
@@ -132,29 +133,33 @@ func (controller *PolicyController) periodicallySyncPolicies() {
 	for {
 		select {
 		case <-time.After(controller.syncPolicyInterval):
-			for _, policy := range controller.Policies {
-				policyEvent, err := policy.Get()
-				if err != nil {
-					controller.Logger.Error(err)
-					continue
-				}
+			controller.syncPolicies()
+		}
+	}
+}
 
-				if policyEvent.Type != firewall.EventTypeFull {
-					controller.Logger.Errorf("expected %s event type for policy %s", firewall.EventTypeFull, policy.Name())
-					continue
-				}
+func (controller *PolicyController) syncPolicies() {
+	for _, policy := range controller.Policies {
+		policyEvent, err := policy.Get()
+		if err != nil {
+			controller.Logger.Error(err)
+			continue
+		}
 
-				if policyEvent.Rego == "" {
-					controller.Logger.Errorf("rego policy not found for policy %s", policy.Name())
-					continue
-				}
+		if policyEvent.Type != firewall.EventTypeFull {
+			controller.Logger.Errorf("expected %s event type for policy %s", firewall.EventTypeFull, policy.Name())
+			continue
+		}
 
-				err = controller.SendPolicyEvent(policyEvent)
-				if err != nil {
-					controller.Logger.Error(err)
-					continue
-				}
-			}
+		if policyEvent.Rego == "" {
+			controller.Logger.Errorf("rego policy not found for policy %s", policy.Name())
+			continue
+		}
+
+		err = controller.SendPolicyEvent(policyEvent)
+		if err != nil {
+			controller.Logger.Error(err)
+			continue
 		}
 	}
 }

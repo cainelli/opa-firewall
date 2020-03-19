@@ -25,16 +25,45 @@ func New(logger *logrus.Logger) *Firewall {
 	firewall := &Firewall{
 		Logger:          logger,
 		Policies:        policies,
+		IPTrees:         make(IPTrees),
 		CompileInterval: 5 * time.Second, // TODO: make it configurable and fix interval before production
 		context:         context.Background(),
+		warmedUp:        make(chan bool),
 	}
 
+	go firewall.consumePoliciesForever()
+
+	go firewall.warmUp()
+	select {
+	case <-firewall.warmedUp:
+		firewall.Logger.Info("warmed up")
+	}
+
+	firewall.Logger.Info("compiling policies")
 	firewall.Compile()
 
-	go firewall.ConsumePolicies()
 	go firewall.periodicallyCompile()
 
 	return firewall
+}
+
+func (firewall *Firewall) warmUp() {
+	firewall.Logger.Info("warming up")
+	const minBacklogToBeReady = 10
+
+	for {
+		if firewall.startedConsuming && firewall.PoliciesBacklog < minBacklogToBeReady {
+			firewall.warmedUp <- true
+			return
+		}
+		if firewall.startedConsuming {
+			firewall.Logger.Infof("lag too high (%d) waiting for lag decrease to %d before startup", firewall.PoliciesBacklog, minBacklogToBeReady)
+		} else {
+			firewall.Logger.Infof("didn't started consuming yet")
+		}
+
+		time.Sleep(5 * time.Second)
+	}
 }
 
 // OnRequest ...
@@ -124,8 +153,7 @@ func (firewall *Firewall) Evaluate(input map[string]interface{}) (bool, error) {
 		}
 	}
 
-	elapsed := time.Since(start)
-	log.Printf("total took %s", elapsed)
+	log.Printf("total took %s", time.Since(start))
 
 	if deny == true && allow == false {
 		return false, nil

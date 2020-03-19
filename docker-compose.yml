@@ -29,7 +29,7 @@ services:
       KPROXY_KAFKA: kafka
       SECURITY_PROTOCOL: SASL_PLAINTEXT
       LIBRD__GROUP_ID: policy-enforcer
-      LIBRD__AUTO_OFFSET_RESET: "earliest"
+      LIBRD__AUTO_OFFSET_RESET: "smallest"
       SASL_MECHANISM: PLAIN
       SASL_PLAIN_USERNAME: admin
       SASL_PLAIN_PASSWORD: admin-secret
